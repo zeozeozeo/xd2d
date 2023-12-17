@@ -1,0 +1,19 @@
+[package]
+name = "xd2d"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+glow = "0.13.0"
+log = "0.4.20"
+thiserror = "1.0.51"
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+glutin = "0.29.1"
+
+['cfg(target_arch = "wasm32")'.dependencies]
+web-sys = { version = "0.3.66", features=["HtmlCanvasElement", "WebGl2RenderingContext", "Window"] }
+wasm-bindgen = "0.2.89"
+
+[dev-dependencies]
+env_logger = "0.10.1"
