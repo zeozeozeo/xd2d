@@ -1,7 +1,13 @@
+use crate::Xd;
+
+/// An application trait that defines callbacks for initializing, updating,
+/// and drawing to the screen.
 pub trait App {
-    fn init(&mut self) {}
+    /// Called just after the window gets opened.
+    #[allow(unused_variables)]
+    fn init(&mut self, xd: &mut Xd) {}
 
-    fn update(&mut self);
+    fn update(&mut self, xd: &mut Xd);
 
-    fn draw(&mut self);
+    fn draw(&mut self, xd: &mut Xd);
 }

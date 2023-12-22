@@ -4,12 +4,12 @@ use xd2d::{App, Xd, XdResult};
 struct ExampleApp;
 
 impl App for ExampleApp {
-    fn update(&mut self) {}
+    fn update(&mut self, _xd: &mut Xd) {}
 
-    fn draw(&mut self) {}
+    fn draw(&mut self, _xd: &mut Xd) {}
 }
 
 fn main() -> XdResult<()> {
     env_logger::init();
-    Xd::default().run(ExampleApp::default())
+    Xd::run(ExampleApp)
 }
