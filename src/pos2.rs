@@ -21,15 +21,15 @@ pub const fn pos2(x: f32, y: f32) -> Pos2 {
 
 impl From<[f32; 2]> for Pos2 {
     #[inline(always)]
-    fn from(v: [f32; 2]) -> Self {
-        Self { x: v[0], y: v[1] }
+    fn from([x, y]: [f32; 2]) -> Self {
+        Self { x, y }
     }
 }
 
 impl From<&[f32; 2]> for Pos2 {
     #[inline(always)]
-    fn from(v: &[f32; 2]) -> Self {
-        Self { x: v[0], y: v[1] }
+    fn from([x, y]: &[f32; 2]) -> Self {
+        Self { x: *x, y: *y }
     }
 }
 
@@ -49,15 +49,15 @@ impl From<&Pos2> for [f32; 2] {
 
 impl From<(f32, f32)> for Pos2 {
     #[inline(always)]
-    fn from(v: (f32, f32)) -> Self {
-        Self { x: v.0, y: v.1 }
+    fn from((x, y): (f32, f32)) -> Self {
+        Self { x, y }
     }
 }
 
 impl From<&(f32, f32)> for Pos2 {
     #[inline(always)]
-    fn from(v: &(f32, f32)) -> Self {
-        Self { x: v.0, y: v.1 }
+    fn from((x, y): &(f32, f32)) -> Self {
+        Self { x: *x, y: *y }
     }
 }
 
