@@ -3,10 +3,10 @@ use std::ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Neg, Sub, SubAssi
 /// Represents a 2-dimensional vector (direction and length).
 #[repr(C)]
 #[derive(Clone, Copy, Default, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub struct Vec2 {
     /// Rightwards. Width.
     pub x: f32,
-
     /// Downwards. Height.
     pub y: f32,
 }

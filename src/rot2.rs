@@ -15,10 +15,10 @@ use super::Vec2;
 /// If not, it will also scale vectors.
 #[repr(C)]
 #[derive(Clone, Copy, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub struct Rot2 {
     /// angle.sin()
     s: f32,
-
     /// angle.cos()
     c: f32,
 }

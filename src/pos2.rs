@@ -4,6 +4,7 @@ use std::ops::{Add, AddAssign, Div, Mul, Sub, SubAssign};
 /// A position on screen in logical pixels.
 #[repr(C)]
 #[derive(Clone, Copy, Default, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub struct Pos2 {
     /// How far to the right.
     pub x: f32,

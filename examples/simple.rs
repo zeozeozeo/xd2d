@@ -1,6 +1,5 @@
 use xd2d::{App, Xd, XdResult};
 
-#[derive(Default)]
 struct ExampleApp;
 
 impl App for ExampleApp {
