@@ -1,7 +1,6 @@
 use crate::{App, WindowSettings, Xd, XdResult};
 use glow::HasContext;
 
-#[derive(Default)]
 pub struct Backend;
 
 impl Backend {
@@ -61,6 +60,12 @@ impl Backend {
         let gl_context = unsafe { gl_context.make_current() }.map_err(|e| e.1)?;
         let gl = unsafe { glow::Context::from_loader_function(|s| gl_context.get_proc_address(s)) };
 
+        // set the initial window size
+        {
+            let inner_size = gl_context.window().inner_size();
+            (xd.width, xd.height) = (inner_size.width, inner_size.height);
+        }
+
         // call init()
         app.init(&mut xd);
 
@@ -78,11 +83,17 @@ impl Backend {
                     if !xd.ignore_swapbuffers {
                         gl_context.swap_buffers().unwrap();
                     }
-
                     // gl_context.window().set_visible(true);
                 }
                 Event::WindowEvent { ref event, .. } => match event {
-                    WindowEvent::Resized(physical_size) => gl_context.resize(*physical_size),
+                    WindowEvent::Resized(physical_size) => {
+                        // resize window
+                        gl_context.resize(*physical_size);
+
+                        // update size, we grab it again incase glutin has changed it
+                        let inner_size = gl_context.window().inner_size();
+                        (xd.width, xd.height) = (inner_size.width, inner_size.height);
+                    }
                     // TODO: free gl resources
                     WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
                     _ => (),

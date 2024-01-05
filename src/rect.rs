@@ -1,340 +1,175 @@
-use crate::{lerp, pos2, vec2, Pos2, Rot2, Vec2};
-use std::f32::INFINITY;
-use std::ops::{Div, Mul};
+use crate::{lerp, vec2, Pos2, Vec2};
 
 #[repr(C)]
-#[derive(Clone, Copy, Eq, PartialEq)]
+#[derive(Clone, Copy, Default, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub struct Rect {
-    /// One of the corners of the rectangle, usually the left top one.
-    pub min: Pos2,
-    /// The other corner, opposing [`Self::min`]. Usually the right bottom one.
-    pub max: Pos2,
+    /// X position.
+    pub x: f32,
+    /// Y position.
+    pub y: f32,
+    /// Width.
+    pub w: f32,
+    /// Height.
+    pub h: f32,
+}
+
+/// `rect(x, y, w, h)` == `Rect::new(x, y, w, h)`
+#[inline]
+pub const fn rect(x: f32, y: f32, w: f32, h: f32) -> Rect {
+    Rect::new(x, y, w, h)
 }
 
 impl Rect {
-    /// Infinite rectangle that contains every point.
-    pub const EVERYTHING: Self = Self {
-        min: pos2(-INFINITY, -INFINITY),
-        max: pos2(INFINITY, INFINITY),
-    };
-
-    /// The inverse of [`Self::EVERYTHING`]: stretches from positive infinity to negative infinity.
-    /// Contains no points.
-    ///
-    /// # Example:
-    /// ```
-    /// # use xd2d::*;
-    /// let mut rect = Rect::NOTHING;
-    /// assert!(rect.size() == Vec2::splat(-f32::INFINITY));
-    /// assert!(rect.contains(pos2(0.0, 0.0)) == false);
-    /// rect.extend_with(pos2(2.0, 1.0));
-    /// rect.extend_with(pos2(0.0, 3.0));
-    /// assert_eq!(rect, Rect::from_min_max(pos2(0.0, 1.0), pos2(2.0, 3.0)))
-    /// ```
-    pub const NOTHING: Self = Self {
-        min: pos2(INFINITY, INFINITY),
-        max: pos2(-INFINITY, -INFINITY),
-    };
-
-    /// An invalid [`Rect`] filled with [`f32::NAN`].
-    pub const NAN: Self = Self {
-        min: pos2(f32::NAN, f32::NAN),
-        max: pos2(f32::NAN, f32::NAN),
-    };
-
-    /// A [`Rect`] filled with zeroes.
     pub const ZERO: Self = Self {
-        min: Pos2::ZERO,
-        max: Pos2::ZERO,
+        x: 0.0,
+        y: 0.0,
+        w: 0.0,
+        h: 0.0,
     };
 
-    #[inline(always)]
-    pub const fn from_min_max(min: Pos2, max: Pos2) -> Self {
-        Rect { min, max }
-    }
-
-    /// Left-top corner plus a size (stretching right-down).
-    #[inline(always)]
-    pub fn from_min_size(min: Pos2, size: Vec2) -> Self {
-        Rect {
-            min,
-            max: min + size,
-        }
-    }
-
-    #[inline(always)]
-    pub fn from_center_size(center: Pos2, size: Vec2) -> Self {
-        Rect {
-            min: center - size * 0.5,
-            max: center + size * 0.5,
-        }
-    }
-
-    /// Returns the bounding rectangle of the two points.
+    /// Create a new rectangle.
     #[inline]
-    pub fn from_two_pos(a: Pos2, b: Pos2) -> Self {
-        Rect {
-            min: pos2(a.x.min(b.x), a.y.min(b.y)),
-            max: pos2(a.x.max(b.x), a.y.max(b.y)),
-        }
-    }
-
-    /// Bounding-box around the points.
-    pub fn from_points(points: &[Pos2]) -> Self {
-        let mut rect = Rect::NOTHING;
-        for &p in points {
-            rect.extend_with(p);
-        }
-        rect
+    pub const fn new(x: f32, y: f32, w: f32, h: f32) -> Self {
+        Self { x, y, w, h }
     }
 
     #[inline]
-    pub fn from_xywh(x: f32, y: f32, w: f32, h: f32) -> Self {
-        Rect {
-            min: pos2(x, y),
-            max: pos2(x + w, y + h),
-        }
-    }
-
-    /// A [`Rect`] that contains every point to the right of the given X coordinate.
-    #[inline]
-    pub fn everything_right_of(left_x: f32) -> Self {
-        let mut rect = Self::EVERYTHING;
-        rect.set_left(left_x);
-        rect
-    }
-
-    /// A [`Rect`] that contains every point to the left of the given X coordinate.
-    #[inline]
-    pub fn everything_left_of(right_x: f32) -> Self {
-        let mut rect = Self::EVERYTHING;
-        rect.set_right(right_x);
-        rect
-    }
-
-    /// A [`Rect`] that contains every point below a certain y coordinate
-    #[inline]
-    pub fn everything_below(top_y: f32) -> Self {
-        let mut rect = Self::EVERYTHING;
-        rect.set_top(top_y);
-        rect
-    }
-
-    /// A [`Rect`] that contains every point above a certain y coordinate
-    #[inline]
-    pub fn everything_above(bottom_y: f32) -> Self {
-        let mut rect = Self::EVERYTHING;
-        rect.set_bottom(bottom_y);
-        rect
-    }
-
-    #[must_use]
-    #[inline]
-    pub fn with_min_x(mut self, min_x: f32) -> Self {
-        self.min.x = min_x;
-        self
-    }
-
-    #[must_use]
-    #[inline]
-    pub fn with_min_y(mut self, min_y: f32) -> Self {
-        self.min.y = min_y;
-        self
-    }
-
-    #[must_use]
-    #[inline]
-    pub fn with_max_x(mut self, max_x: f32) -> Self {
-        self.max.x = max_x;
-        self
-    }
-
-    #[must_use]
-    #[inline]
-    pub fn with_max_y(mut self, max_y: f32) -> Self {
-        self.max.y = max_y;
-        self
-    }
-
-    /// Expand by this much in each direction, keeping the center
-    #[must_use]
-    pub fn expand(self, amnt: f32) -> Self {
-        self.expand2(Vec2::splat(amnt))
-    }
-
-    /// Expand by this much in each direction, keeping the center
-    #[must_use]
-    pub fn expand2(self, amnt: Vec2) -> Self {
-        Rect::from_min_max(self.min - amnt, self.max + amnt)
-    }
-
-    /// Shrink by this much in each direction, keeping the center
-    #[must_use]
-    pub fn shrink(self, amnt: f32) -> Self {
-        self.shrink2(Vec2::splat(amnt))
-    }
-
-    /// Shrink by this much in each direction, keeping the center
-    #[must_use]
-    pub fn shrink2(self, amnt: Vec2) -> Self {
-        Rect::from_min_max(self.min + amnt, self.max - amnt)
-    }
-
-    #[must_use]
-    #[inline]
-    pub fn translate(self, amnt: Vec2) -> Self {
-        Rect::from_min_size(self.min + amnt, self.size())
-    }
-
-    /// Rotate the bounds (will expand the [`Rect`])
-    #[must_use]
-    #[inline]
-    pub fn rotate_bb(self, rot: Rot2) -> Self {
-        let a = rot * self.left_top().to_vec2();
-        let b = rot * self.right_top().to_vec2();
-        let c = rot * self.left_bottom().to_vec2();
-        let d = rot * self.right_bottom().to_vec2();
-
-        Self::from_min_max(
-            a.min(b).min(c).min(d).to_pos2(),
-            a.max(b).max(c).max(d).to_pos2(),
-        )
-    }
-
-    #[must_use]
-    #[inline]
-    pub fn intersects(self, other: Rect) -> bool {
-        self.min.x <= other.max.x
-            && other.min.x <= self.max.x
-            && self.min.y <= other.max.y
-            && other.min.y <= self.max.y
-    }
-
-    /// Keep min
-    pub fn set_width(&mut self, w: f32) {
-        self.max.x = self.min.x + w;
-    }
-
-    /// Keep min
-    pub fn set_height(&mut self, h: f32) {
-        self.max.y = self.min.y + h;
-    }
-
-    /// Keep size
-    pub fn set_center(&mut self, center: Pos2) {
-        *self = self.translate(center - self.center());
-    }
-
-    #[must_use]
-    #[inline(always)]
-    pub fn contains(&self, p: Pos2) -> bool {
-        self.min.x <= p.x && p.x <= self.max.x && self.min.y <= p.y && p.y <= self.max.y
-    }
-
-    #[must_use]
-    pub fn contains_rect(&self, other: Rect) -> bool {
-        self.contains(other.min) && self.contains(other.max)
-    }
-
-    /// Return the given points clamped to be inside the rectangle
-    /// Panics if [`Self::is_negative`].
-    #[must_use]
-    pub fn clamp(&self, p: Pos2) -> Pos2 {
-        p.clamp(self.min, self.max)
-    }
-
-    #[inline(always)]
-    pub fn extend_with(&mut self, p: Pos2) {
-        self.min = self.min.min(p);
-        self.max = self.max.max(p);
-    }
-
-    #[inline(always)]
-    /// Expand to include the given x coordinate
-    pub fn extend_with_x(&mut self, x: f32) {
-        self.min.x = self.min.x.min(x);
-        self.max.x = self.max.x.max(x);
-    }
-
-    #[inline(always)]
-    /// Expand to include the given y coordinate
-    pub fn extend_with_y(&mut self, y: f32) {
-        self.min.y = self.min.y.min(y);
-        self.max.y = self.max.y.max(y);
-    }
-
-    /// The union of two bounding rectangle, i.e. the minimum [`Rect`]
-    /// that contains both input rectangles.
-    #[inline(always)]
-    #[must_use]
-    pub fn union(self, other: Rect) -> Rect {
-        Rect {
-            min: self.min.min(other.min),
-            max: self.max.max(other.max),
-        }
-    }
-
-    /// The intersection of two [`Rect`], i.e. the area covered by both.
-    #[inline]
-    #[must_use]
-    pub fn intersect(self, other: Rect) -> Self {
+    pub fn from_min_max(min: Pos2, max: Pos2) -> Self {
         Self {
-            min: self.min.max(other.min),
-            max: self.max.min(other.max),
+            x: min.x,
+            y: min.y,
+            w: max.x - min.x,
+            h: max.y - min.y,
         }
     }
 
-    #[inline(always)]
+    #[inline]
+    pub const fn from_min_size(min: Pos2, size: Vec2) -> Self {
+        Self {
+            x: min.x,
+            y: min.y,
+            w: size.x,
+            h: size.y,
+        }
+    }
+
+    #[inline]
+    pub fn contains(&self, pos: Pos2) -> bool {
+        pos.x >= self.x && pos.x <= self.x + self.w && pos.y >= self.y && pos.y <= self.y + self.h
+    }
+
+    #[inline]
+    pub fn intersects(&self, other: &Self) -> bool {
+        self.x < other.x + other.w
+            && self.x + self.w > other.x
+            && self.y < other.y + other.h
+            && self.y + self.h > other.y
+    }
+
+    #[inline]
     pub fn center(&self) -> Pos2 {
-        Pos2 {
-            x: (self.min.x + self.max.x) / 2.0,
-            y: (self.min.y + self.max.y) / 2.0,
+        Pos2::new(self.x + self.w / 2.0, self.y + self.h / 2.0)
+    }
+
+    #[inline]
+    pub const fn min(&self) -> Pos2 {
+        Pos2::new(self.x, self.y)
+    }
+
+    #[inline]
+    pub fn max(&self) -> Pos2 {
+        Pos2::new(self.x + self.w, self.y + self.h)
+    }
+
+    #[inline]
+    pub const fn size(&self) -> Vec2 {
+        vec2(self.w, self.h)
+    }
+
+    #[inline]
+    pub fn expand(&self, amount: f32) -> Self {
+        Self {
+            x: self.x - amount,
+            y: self.y - amount,
+            w: self.w + amount * 2.0,
+            h: self.h + amount * 2.0,
         }
     }
 
-    /// `rect.size() == Vec2 { x: rect.width(), y: rect.height() }`
-    #[inline(always)]
-    pub fn size(&self) -> Vec2 {
-        self.max - self.min
-    }
-
-    #[inline(always)]
-    pub fn width(&self) -> f32 {
-        self.max.x - self.min.x
-    }
-
-    #[inline(always)]
-    pub fn height(&self) -> f32 {
-        self.max.y - self.min.y
-    }
-
-    /// Width / height
-    ///
-    /// * `aspect_ratio < 1`: portrait / high
-    /// * `aspect_ratio = 1`: square
-    /// * `aspect_ratio > 1`: landscape / wide
-    pub fn aspect_ratio(&self) -> f32 {
-        self.width() / self.height()
-    }
-
-    /// `[2, 1]` for wide screen, and `[1, 2]` for portrait, etc.
-    /// At least one dimension = 1, the other >= 1
-    /// Returns the proportions required to letter-box a square view area.
-    pub fn square_proportions(&self) -> Vec2 {
-        let w = self.width();
-        let h = self.height();
-        if w > h {
-            vec2(w / h, 1.0)
-        } else {
-            vec2(1.0, h / w)
+    #[inline]
+    pub fn expand_to_include(&self, pos: Pos2) -> Self {
+        Self {
+            x: self.x.min(pos.x),
+            y: self.y.min(pos.y),
+            w: self.w.max(pos.x - self.x),
+            h: self.h.max(pos.y - self.y),
         }
     }
 
-    /// The area of the rectangle (width * height).
-    #[inline(always)]
+    #[inline]
+    pub fn translate(&self, offset: Vec2) -> Self {
+        Self {
+            x: self.x + offset.x,
+            y: self.y + offset.y,
+            w: self.w,
+            h: self.h,
+        }
+    }
+
+    #[inline]
+    pub fn round(&self) -> Self {
+        Self {
+            x: self.x.round(),
+            y: self.y.round(),
+            w: self.w.round(),
+            h: self.h.round(),
+        }
+    }
+
+    #[inline]
+    pub fn ceil(&self) -> Self {
+        Self {
+            x: self.x.ceil(),
+            y: self.y.ceil(),
+            w: self.w.ceil(),
+            h: self.h.ceil(),
+        }
+    }
+
+    #[inline]
+    pub fn floor(&self) -> Self {
+        Self {
+            x: self.x.floor(),
+            y: self.y.floor(),
+            w: self.w.floor(),
+            h: self.h.floor(),
+        }
+    }
+
+    #[inline]
+    pub const fn set_x(self, x: f32) -> Self {
+        Self { x, ..self }
+    }
+
+    #[inline]
+    pub const fn set_y(self, y: f32) -> Self {
+        Self { y, ..self }
+    }
+
+    #[inline]
+    pub const fn set_w(self, w: f32) -> Self {
+        Self { w, ..self }
+    }
+
+    #[inline]
+    pub const fn set_h(self, h: f32) -> Self {
+        Self { h, ..self }
+    }
+
+    #[inline]
     pub fn area(&self) -> f32 {
-        self.width() * self.height()
+        self.w * self.h
     }
 
     /// The distance from the rect to the position.
@@ -350,18 +185,18 @@ impl Rect {
     /// The distance is zero when the position is in the interior of the rectangle.
     #[inline]
     pub fn distance_sq_to_pos(&self, pos: Pos2) -> f32 {
-        let dx = if self.min.x > pos.x {
-            self.min.x - pos.x
-        } else if pos.x > self.max.x {
-            pos.x - self.max.x
+        let dx = if pos.x < self.x {
+            self.x - pos.x
+        } else if pos.x > self.x + self.w {
+            pos.x - (self.x + self.w)
         } else {
             0.0
         };
 
-        let dy = if self.min.y > pos.y {
-            self.min.y - pos.y
-        } else if pos.y > self.max.y {
-            pos.y - self.max.y
+        let dy = if pos.y < self.y {
+            self.y - pos.y
+        } else if pos.y > self.y + self.h {
+            pos.y - (self.y + self.h)
         } else {
             0.0
         };
@@ -387,13 +222,13 @@ impl Rect {
         inside_dist + outside_dist
     }
 
-    /// Linearly interpolate so that `[0, 0]` is [`Self::min`] and
-    /// `[1, 1]` is [`Self::max`].
+    /// Linearly interpolate so that `[0, 0]` is the minimum point and
+    /// `[1, 1]` is the maximum point.
     #[inline]
     pub fn lerp_inside(&self, t: Vec2) -> Pos2 {
         Pos2 {
-            x: lerp(self.min.x..=self.max.x, t.x),
-            y: lerp(self.min.y..=self.max.y, t.y),
+            x: lerp(self.min().x..=self.max().x, t.x),
+            y: lerp(self.min().y..=self.max().y, t.y),
         }
     }
 
@@ -401,229 +236,69 @@ impl Rect {
     #[inline]
     pub fn lerp_towards(&self, other: &Rect, t: f32) -> Self {
         Self {
-            min: self.min.lerp(other.min, t),
-            max: self.max.lerp(other.max, t),
+            x: lerp(self.x..=other.x, t),
+            y: lerp(self.y..=other.y, t),
+            w: lerp(self.w..=other.w, t),
+            h: lerp(self.h..=other.h, t),
         }
     }
 
-    /// `width < 0 || height < 0`
-    #[inline(always)]
+    /// `w < 0 || h < 0`
+    #[inline]
     pub fn is_negative(&self) -> bool {
-        self.max.x < self.min.x || self.max.y < self.min.y
+        self.w < 0.0 || self.h < 0.0
     }
 
     /// `width > 0 && height > 0`
-    #[inline(always)]
+    #[inline]
     pub fn is_positive(&self) -> bool {
-        self.min.x < self.max.x && self.min.y < self.max.y
+        self.w > 0.0 || self.h > 0.0
     }
 
     /// True if all members are also finite.
     #[inline(always)]
     pub fn is_finite(&self) -> bool {
-        self.min.is_finite() && self.max.is_finite()
+        self.x.is_finite() && self.y.is_finite() && self.w.is_finite() && self.h.is_finite()
     }
 
     /// True if any member is NaN.
     #[inline(always)]
     pub fn any_nan(self) -> bool {
-        self.min.any_nan() || self.max.any_nan()
+        self.x.is_nan() || self.y.is_nan() || self.w.is_nan() || self.h.is_nan()
     }
 }
 
-/// ## Convenience functions (assumes origin is towards left top):
-impl Rect {
-    /// `min.x`
-    #[inline(always)]
-    pub fn left(&self) -> f32 {
-        self.min.x
-    }
-
-    /// `min.x`
-    #[inline(always)]
-    pub fn left_mut(&mut self) -> &mut f32 {
-        &mut self.min.x
-    }
-
-    /// `min.x`
-    #[inline(always)]
-    pub fn set_left(&mut self, x: f32) {
-        self.min.x = x;
-    }
-
-    /// `max.x`
-    #[inline(always)]
-    pub fn right(&self) -> f32 {
-        self.max.x
-    }
-
-    /// `max.x`
-    #[inline(always)]
-    pub fn right_mut(&mut self) -> &mut f32 {
-        &mut self.max.x
-    }
-
-    /// `max.x`
-    #[inline(always)]
-    pub fn set_right(&mut self, x: f32) {
-        self.max.x = x;
-    }
-
-    /// `min.y`
-    #[inline(always)]
-    pub fn top(&self) -> f32 {
-        self.min.y
-    }
-
-    /// `min.y`
-    #[inline(always)]
-    pub fn top_mut(&mut self) -> &mut f32 {
-        &mut self.min.y
-    }
-
-    /// `min.y`
-    #[inline(always)]
-    pub fn set_top(&mut self, y: f32) {
-        self.min.y = y;
-    }
-
-    /// `max.y`
-    #[inline(always)]
-    pub fn bottom(&self) -> f32 {
-        self.max.y
-    }
-
-    /// `max.y`
-    #[inline(always)]
-    pub fn bottom_mut(&mut self) -> &mut f32 {
-        &mut self.max.y
-    }
-
-    /// `max.y`
-    #[inline(always)]
-    pub fn set_bottom(&mut self, y: f32) {
-        self.max.y = y;
-    }
-
-    #[inline(always)]
-    pub fn left_top(&self) -> Pos2 {
-        pos2(self.left(), self.top())
-    }
-
-    #[inline(always)]
-    pub fn center_top(&self) -> Pos2 {
-        pos2(self.center().x, self.top())
-    }
-
-    #[inline(always)]
-    pub fn right_top(&self) -> Pos2 {
-        pos2(self.right(), self.top())
-    }
-
-    #[inline(always)]
-    pub fn left_center(&self) -> Pos2 {
-        pos2(self.left(), self.center().y)
-    }
-
-    #[inline(always)]
-    pub fn right_center(&self) -> Pos2 {
-        pos2(self.right(), self.center().y)
-    }
-
-    #[inline(always)]
-    pub fn left_bottom(&self) -> Pos2 {
-        pos2(self.left(), self.bottom())
-    }
-
-    #[inline(always)]
-    pub fn center_bottom(&self) -> Pos2 {
-        pos2(self.center().x, self.bottom())
-    }
-
-    #[inline(always)]
-    pub fn right_bottom(&self) -> Pos2 {
-        pos2(self.right(), self.bottom())
-    }
-
-    /// Split rectangle in left and right halves. `t` is expected to be in the (0,1) range.
-    pub fn split_left_right_at_fraction(&self, t: f32) -> (Rect, Rect) {
-        self.split_left_right_at_x(lerp(self.min.x..=self.max.x, t))
-    }
-
-    /// Split rectangle in left and right halves at the given `x` coordinate.
-    pub fn split_left_right_at_x(&self, split_x: f32) -> (Rect, Rect) {
-        let left = Rect::from_min_max(self.min, Pos2::new(split_x, self.max.y));
-        let right = Rect::from_min_max(Pos2::new(split_x, self.min.y), self.max);
-        (left, right)
-    }
-
-    /// Split rectangle in top and bottom halves. `t` is expected to be in the (0,1) range.
-    pub fn split_top_bottom_at_fraction(&self, t: f32) -> (Rect, Rect) {
-        self.split_top_bottom_at_y(lerp(self.min.y..=self.max.y, t))
-    }
-
-    /// Split rectangle in top and bottom halves at the given `y` coordinate.
-    pub fn split_top_bottom_at_y(&self, split_y: f32) -> (Rect, Rect) {
-        let top = Rect::from_min_max(self.min, Pos2::new(self.max.x, split_y));
-        let bottom = Rect::from_min_max(Pos2::new(self.min.x, split_y), self.max);
-        (top, bottom)
-    }
-}
-
-impl std::fmt::Debug for Rect {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "[{:?} - {:?}]", self.min, self.max)
-    }
-}
-
-/// from [min, max] or [left top, right bottom]
-impl From<[Pos2; 2]> for Rect {
+impl From<[f32; 4]> for Rect {
     #[inline]
-    fn from([min, max]: [Pos2; 2]) -> Self {
-        Self { min, max }
+    fn from([x, y, w, h]: [f32; 4]) -> Self {
+        Self::new(x, y, w, h)
     }
 }
 
-/// from (min, max) or (left top, right bottom)
-impl From<(Pos2, Pos2)> for Rect {
+impl From<(f32, f32, f32, f32)> for Rect {
     #[inline]
-    fn from((min, max): (Pos2, Pos2)) -> Self {
-        Self { min, max }
+    fn from((x, y, w, h): (f32, f32, f32, f32)) -> Self {
+        Self::new(x, y, w, h)
     }
 }
 
-impl Mul<f32> for Rect {
-    type Output = Rect;
-
+impl From<(Pos2, Vec2)> for Rect {
     #[inline]
-    fn mul(self, factor: f32) -> Rect {
-        Rect {
-            min: self.min * factor,
-            max: self.max * factor,
-        }
+    fn from((min, size): (Pos2, Vec2)) -> Self {
+        Self::from_min_size(min, size)
     }
 }
 
-impl Mul<Rect> for f32 {
-    type Output = Rect;
-
+impl From<Rect> for Vec2 {
     #[inline]
-    fn mul(self, vec: Rect) -> Rect {
-        Rect {
-            min: self * vec.min,
-            max: self * vec.max,
-        }
+    fn from(rect: Rect) -> Self {
+        Self::new(rect.x, rect.y)
     }
 }
 
-impl Div<f32> for Rect {
-    type Output = Rect;
-
+impl From<Rect> for Pos2 {
     #[inline]
-    fn div(self, factor: f32) -> Rect {
-        Rect {
-            min: self.min / factor,
-            max: self.max / factor,
-        }
+    fn from(rect: Rect) -> Self {
+        Self::new(rect.x, rect.y)
     }
 }
